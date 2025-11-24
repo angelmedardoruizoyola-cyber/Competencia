@@ -9,11 +9,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const notificationSound = document.getElementById('notificationSound');
 
     // Elementos multimedia
-    const loadWebBtn = document.getElementById('loadWebBtn');
+    const loadImageBtn = document.getElementById('loadImageBtn');
     const loadVideoBtn = document.getElementById('loadVideoBtn');
+    const imageFile = document.getElementById('imageFile');
     const videoFile = document.getElementById('videoFile');
-    const webUrl = document.getElementById('webUrl');
-    const webFrame = document.getElementById('webFrame');
+    const imagePlayer = document.getElementById('imagePlayer');
     const videoPlayer = document.getElementById('videoPlayer');
     const placeholder = document.getElementById('placeholder');
 
@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let secondaryTimeLeft = 30; // 30 segundos adicionales
     let timerInterval;
     let isRunning = false;
+    let isExtraTime = false; // Controla si estamos en tiempo adicional
     let tenMinuteWarningPlayed = false;
     let fiveMinuteWarningPlayed = false;
 
@@ -43,6 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Actualizar tiempo seleccionado
             selectedTime = parseInt(this.getAttribute('data-time'));
             mainTimeLeft = selectedTime * 60;
+            isExtraTime = false;
             resetWarnings();
             updateDisplay();
         });
@@ -54,31 +56,41 @@ document.addEventListener('DOMContentLoaded', function() {
     resetBtn.addEventListener('click', resetTimer);
 
     // Event listeners para controles multimedia
-    loadWebBtn.addEventListener('click', function() {
-        // Mostrar campo de URL
-        if (webUrl.style.display === 'none') {
-            webUrl.style.display = 'block';
-            webUrl.focus();
-        } else {
-            loadWebContent();
-        }
+    loadImageBtn.addEventListener('click', function() {
+        imageFile.click();
     });
 
     loadVideoBtn.addEventListener('click', function() {
         videoFile.click();
     });
 
-    videoFile.addEventListener('change', function(e) {
+    imageFile.addEventListener('change', function(e) {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
+
+            // Validar que sea una imagen
+            if (!file.type.startsWith('image/')) {
+                showError('Por favor, selecciona un archivo de imagen válido');
+                return;
+            }
+
             const url = URL.createObjectURL(file);
-            loadVideo(url);
+            loadImage(url);
         }
     });
 
-    webUrl.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            loadWebContent();
+    videoFile.addEventListener('change', function(e) {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+
+            // Validar que sea un video
+            if (!file.type.startsWith('video/')) {
+                showError('Por favor, selecciona un archivo de video válido');
+                return;
+            }
+
+            const url = URL.createObjectURL(file);
+            loadVideo(url);
         }
     });
 
@@ -92,24 +104,48 @@ document.addEventListener('DOMContentLoaded', function() {
         resetBtn.disabled = false;
 
         timerInterval = setInterval(() => {
-            // Actualizar tiempos
-            if (secondaryTimeLeft > 0) {
-                secondaryTimeLeft--;
-            } else {
-                if (mainTimeLeft > 0) {
-                    mainTimeLeft--;
-                    secondaryTimeLeft = 30; // Reiniciar los 30 segundos adicionales
+            // Si estamos en tiempo adicional (30 segundos extra)
+            if (isExtraTime) {
+                if (secondaryTimeLeft > 0) {
+                    secondaryTimeLeft--;
+
+                    // Cuenta regresiva de 10 segundos en tiempo adicional
+                    if (secondaryTimeLeft <= 10 && secondaryTimeLeft > 0) {
+                        playNotification(`${secondaryTimeLeft}`);
+
+                        // Cambiar color del cronómetro secundario
+                        secondaryTimer.classList.add('secondary-timer-warning');
+                    }
                 } else {
-                    // Tiempo completado
+                    // Tiempo completamente terminado
                     clearInterval(timerInterval);
                     isRunning = false;
-                    playNotification("¡Tiempo completado!");
+                    playNotification("¡Tiempo completamente terminado!");
+
+                    // Restablecer colores
+                    secondaryTimer.classList.remove('secondary-timer-warning');
                     return;
                 }
             }
+            // Si estamos en tiempo principal
+            else {
+                if (mainTimeLeft > 0) {
+                    mainTimeLeft--;
 
-            // Verificar alertas
-            checkAlerts();
+                    // Verificar alertas durante el tiempo principal
+                    checkAlerts();
+                } else {
+                    // Tiempo principal terminado, iniciar tiempo adicional
+                    isExtraTime = true;
+                    secondaryTimeLeft = 30; // 30 segundos adicionales
+                    playNotification("Tiempo principal terminado. Iniciando 30 segundos adicionales");
+
+                    // Cambiar el estilo para indicar tiempo adicional
+                    mainTimer.textContent = "00:00";
+                    mainTimer.classList.remove('timer-warning', 'timer-danger');
+                    mainTimer.classList.add('timer-normal');
+                }
+            }
 
             // Actualizar pantalla
             updateDisplay();
@@ -126,6 +162,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function resetTimer() {
         clearInterval(timerInterval);
         isRunning = false;
+        isExtraTime = false;
         mainTimeLeft = selectedTime * 60;
         secondaryTimeLeft = 30;
         resetWarnings();
@@ -137,20 +174,28 @@ document.addEventListener('DOMContentLoaded', function() {
         // Restablecer colores
         mainTimer.classList.remove('timer-warning', 'timer-danger');
         mainTimer.classList.add('timer-normal');
+        secondaryTimer.classList.remove('secondary-timer-warning');
     }
 
     function updateDisplay() {
-        // Actualizar cronómetro principal
-        const mainMinutes = Math.floor(mainTimeLeft / 60);
-        const mainSeconds = mainTimeLeft % 60;
-        mainTimer.textContent = `${mainMinutes.toString().padStart(2, '0')}:${mainSeconds.toString().padStart(2, '0')}`;
-
-        // Actualizar cronómetro secundario
-        secondaryTimer.textContent = `+${secondaryTimeLeft.toString().padStart(2, '0')}`;
+        if (isExtraTime) {
+            // En tiempo adicional: mostrar 00:00 + 30 segundos contando
+            mainTimer.textContent = "00:00";
+            secondaryTimer.textContent = `+${secondaryTimeLeft.toString().padStart(2, '0')}`;
+        } else {
+            // En tiempo normal: mostrar tiempo principal + 30 segundos fijos
+            const mainMinutes = Math.floor(mainTimeLeft / 60);
+            const mainSeconds = mainTimeLeft % 60;
+            mainTimer.textContent = `${mainMinutes.toString().padStart(2, '0')}:${mainSeconds.toString().padStart(2, '0')}`;
+            secondaryTimer.textContent = "+30";
+        }
     }
 
     function checkAlerts() {
-        const totalSecondsLeft = mainTimeLeft + secondaryTimeLeft;
+        // Solo verificar alertas durante el tiempo principal
+        if (isExtraTime) return;
+
+        const totalSecondsLeft = mainTimeLeft;
 
         // Alerta de 10 minutos (600 segundos)
         if (totalSecondsLeft === 600 && !tenMinuteWarningPlayed) {
@@ -168,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fiveMinuteWarningPlayed = true;
         }
 
-        // Cuenta regresiva de 10 segundos
+        // Cuenta regresiva de 10 segundos (solo en tiempo principal)
         if (totalSecondsLeft <= 10 && totalSecondsLeft > 0) {
             playNotification(`${totalSecondsLeft}`);
         }
@@ -199,36 +244,66 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Funciones multimedia
-    function loadWebContent() {
-        const url = webUrl.value.trim();
-        if (!url) {
-            alert('Por favor, ingresa una URL válida');
-            return;
+    function loadImage(url) {
+        try {
+            // Ocultar otros elementos multimedia
+            videoPlayer.style.display = 'none';
+            videoPlayer.src = '';
+            placeholder.style.display = 'none';
+
+            // Mostrar mensaje de carga
+            placeholder.style.display = 'flex';
+            placeholder.innerHTML = '<p class="loading-message">Cargando imagen...</p>';
+
+            // Configurar y mostrar imagen
+            imagePlayer.src = url;
+            imagePlayer.style.display = 'block';
+
+            // Manejar carga exitosa
+            imagePlayer.onload = function() {
+                placeholder.style.display = 'none';
+            };
+
+            // Manejar errores
+            imagePlayer.onerror = function() {
+                showError('Error: No se pudo cargar la imagen');
+                imagePlayer.style.display = 'none';
+            };
+
+        } catch (error) {
+            showError('Error: No se pudo cargar la imagen');
+            console.error('Error cargando imagen:', error);
         }
-
-        // Ocultar otros elementos multimedia
-        videoPlayer.style.display = 'none';
-        placeholder.style.display = 'none';
-
-        // Mostrar iframe
-        webFrame.src = url;
-        webFrame.style.display = 'block';
-
-        // Ocultar campo de URL
-        webUrl.style.display = 'none';
-        webUrl.value = '';
     }
 
     function loadVideo(url) {
-        // Ocultar otros elementos multimedia
-        webFrame.style.display = 'none';
-        placeholder.style.display = 'none';
+        try {
+            // Ocultar otros elementos multimedia
+            imagePlayer.style.display = 'none';
+            imagePlayer.src = '';
+            placeholder.style.display = 'none';
 
-        // Configurar y mostrar video
-        videoPlayer.src = url;
-        videoPlayer.loop = true;
-        videoPlayer.style.display = 'block';
-        videoPlayer.play().catch(e => console.log("No se pudo reproducir el video automáticamente:", e));
+            // Configurar y mostrar video
+            videoPlayer.src = url;
+            videoPlayer.loop = true;
+            videoPlayer.controls = true;
+            videoPlayer.style.display = 'block';
+
+            // Intentar reproducir automáticamente
+            videoPlayer.play().catch(e => {
+                console.log("No se pudo reproducir el video automáticamente:", e);
+                // El usuario podrá reproducirlo manualmente con los controles
+            });
+
+        } catch (error) {
+            showError('Error: No se pudo cargar el video');
+            console.error('Error cargando video:', error);
+        }
+    }
+
+    function showError(message) {
+        placeholder.style.display = 'flex';
+        placeholder.innerHTML = `<p class="error-message">${message}</p>`;
     }
 
     // Establecer el botón de 25 minutos como activo por defecto
