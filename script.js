@@ -19,6 +19,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let isExtraTime = false;
     
     // ======= VARIABLES ESP32 =======
+    const ESP32_IP = "192.168.0.105"; // ← ¡CAMBIAR ESTA LÍNEA!
+let esp32Connected = false;
+let buttonCheckInterval;
+    
     const ESP32_IP = "192.168.0.105"; // TU IP
     let esp32Connected = false;
     let buttonCheckInterval;
