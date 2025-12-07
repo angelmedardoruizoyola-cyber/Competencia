@@ -1,249 +1,309 @@
-// script.js - VERSIÓN SIMPLE PARA PULSADOR
+// script.js - VERSIÓN QUE EVITA TIMEOUT
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Sistema Pulsador ESP32');
+    console.log('⏱️ Sistema Temporizador - Modo Simple');
     
+    // CONFIGURACIÓN
     const ESP32_IP = "192.168.0.105";
-    let esp32Conectado = false;
+    let esp32Online = false;
+    let lastCheck = 0;
     
-    // Elementos
-    const mainTimer = document.getElementById('mainTimer');
-    const secondaryTimer = document.getElementById('secondaryTimer');
-    const startBtn = document.getElementById('startBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const resetBtn = document.getElementById('resetBtn');
+    // ELEMENTOS
+    const elementos = {
+        mainTimer: document.getElementById('mainTimer'),
+        secondaryTimer: document.getElementById('secondaryTimer'),
+        startBtn: document.getElementById('startBtn'),
+        pauseBtn: document.getElementById('pauseBtn'),
+        resetBtn: document.getElementById('resetBtn'),
+        timeButtons: document.querySelectorAll('.time-btn')
+    };
     
-    // Variables del temporizador
-    let tiempoSeleccionado = 25;
-    let tiempoPrincipal = tiempoSeleccionado * 60;
-    let tiempoSecundario = 30;
-    let intervalo = null;
-    let enEjecucion = false;
-    let tiempoExtra = false;
+    // ESTADO
+    let estado = {
+        tiempo: 25 * 60,
+        extra: 30,
+        intervalo: null,
+        corriendo: false,
+        tiempoExtra: false
+    };
     
-    // Inicializar
-    actualizarDisplay();
-    crearPanelControl();
+    // INICIALIZAR
+    init();
     
-    // Event Listeners
-    startBtn.addEventListener('click', iniciarTemporizador);
-    pauseBtn.addEventListener('click', pausarTemporizador);
-    resetBtn.addEventListener('click', reiniciarTemporizador);
-    
-    // Conectar ESP32 después de 2 segundos
-    setTimeout(conectarESP32, 2000);
-    
-    // ======= FUNCIONES TEMPORIZADOR =======
-    function iniciarTemporizador() {
-        if (enEjecucion) return;
-        enEjecucion = true;
-        startBtn.disabled = true;
-        pauseBtn.disabled = false;
-        resetBtn.disabled = false;
+    function init() {
+        actualizarDisplay();
+        crearPanel();
+        setupEventos();
         
-        intervalo = setInterval(() => {
-            if (tiempoExtra) {
-                if (tiempoSecundario > 0) {
-                    tiempoSecundario--;
+        // Conectar ESP32
+        setTimeout(conectarESP32, 1000);
+        
+        // Botón activo por defecto
+        if (elementos.timeButtons.length > 0) {
+            elementos.timeButtons[0].classList.add('active');
+        }
+    }
+    
+    // ======= TEMPORIZADOR =======
+    function actualizarDisplay() {
+        if (estado.tiempoExtra) {
+            elementos.mainTimer.textContent = "00:00";
+            elementos.secondaryTimer.textContent = `+${estado.extra.toString().padStart(2, '0')}`;
+        } else {
+            const min = Math.floor(estado.tiempo / 60);
+            const seg = estado.tiempo % 60;
+            elementos.mainTimer.textContent = `${min.toString().padStart(2, '0')}:${seg.toString().padStart(2, '0')}`;
+            elementos.secondaryTimer.textContent = "+30";
+        }
+    }
+    
+    function iniciar() {
+        if (estado.corriendo) return;
+        estado.corriendo = true;
+        elementos.startBtn.disabled = true;
+        elementos.pauseBtn.disabled = false;
+        
+        estado.intervalo = setInterval(() => {
+            if (estado.tiempoExtra) {
+                if (estado.extra > 0) {
+                    estado.extra--;
                 } else {
-                    clearInterval(intervalo);
-                    enEjecucion = false;
-                    tiempoExtra = false;
-                    tiempoPrincipal = tiempoSeleccionado * 60;
-                    tiempoSecundario = 30;
-                    startBtn.disabled = false;
-                    pauseBtn.disabled = true;
+                    clearInterval(estado.intervalo);
+                    estado.corriendo = false;
+                    estado.tiempoExtra = false;
+                    estado.tiempo = 25 * 60;
+                    estado.extra = 30;
+                    elementos.startBtn.disabled = false;
+                    elementos.pauseBtn.disabled = true;
                 }
             } else {
-                if (tiempoPrincipal > 0) {
-                    tiempoPrincipal--;
+                if (estado.tiempo > 0) {
+                    estado.tiempo--;
                 } else {
-                    tiempoExtra = true;
-                    tiempoSecundario = 30;
+                    estado.tiempoExtra = true;
+                    estado.extra = 30;
                 }
             }
             actualizarDisplay();
         }, 1000);
     }
     
-    function pausarTemporizador() {
-        clearInterval(intervalo);
-        enEjecucion = false;
-        startBtn.disabled = false;
-        pauseBtn.disabled = true;
+    function pausar() {
+        clearInterval(estado.intervalo);
+        estado.corriendo = false;
+        elementos.startBtn.disabled = false;
+        elementos.pauseBtn.disabled = true;
     }
     
-    function reiniciarTemporizador() {
-        clearInterval(intervalo);
-        enEjecucion = false;
-        tiempoExtra = false;
-        tiempoPrincipal = tiempoSeleccionado * 60;
-        tiempoSecundario = 30;
+    function reiniciar() {
+        clearInterval(estado.intervalo);
+        estado.corriendo = false;
+        estado.tiempoExtra = false;
+        estado.tiempo = 25 * 60;
+        estado.extra = 30;
         actualizarDisplay();
-        startBtn.disabled = false;
-        pauseBtn.disabled = true;
-        resetBtn.disabled = true;
+        elementos.startBtn.disabled = false;
+        elementos.pauseBtn.disabled = true;
+        elementos.resetBtn.disabled = true;
     }
     
-    function actualizarDisplay() {
-        if (tiempoExtra) {
-            mainTimer.textContent = "00:00";
-            secondaryTimer.textContent = `+${tiempoSecundario.toString().padStart(2, '0')}`;
-        } else {
-            const minutos = Math.floor(tiempoPrincipal / 60);
-            const segundos = tiempoPrincipal % 60;
-            mainTimer.textContent = `${minutos.toString().padStart(2, '0')}:${segundos.toString().padStart(2, '0')}`;
-            secondaryTimer.textContent = "+30";
-        }
-    }
-    
-    // ======= CONEXIÓN ESP32 =======
+    // ======= ESP32 - MÉTODO QUE SÍ FUNCIONA =======
     function conectarESP32() {
-        console.log('Conectando ESP32...');
-        actualizarEstado('Conectando...', 'orange');
+        console.log('🔄 Conectando ESP32...');
+        actualizarEstado('Conectando...', '#FF9800');
         
-        // Probar conexión
-        probarConexion();
+        // Método 1: Usar Image (NO bloqueado por CORS)
+        verificarConexion();
         
-        // Verificar cada 5 segundos
-        setInterval(probarConexion, 5000);
+        // Verificar cada 4 segundos
+        setInterval(verificarConexion, 4000);
         
-        // Verificar pulsador cada 1 segundo
-        setInterval(verificarPulsador, 1000);
+        // Verificar pulsador cada 2 segundos
+        setInterval(verificarPulsador, 2000);
     }
     
-    function probarConexion() {
+    function verificarConexion() {
         const img = new Image();
+        const inicio = Date.now();
+        
         img.onload = function() {
-            if (!esp32Conectado) {
-                esp32Conectado = true;
-                actualizarEstado('Conectado', 'green');
-                console.log('✅ ESP32 conectado');
+            const latencia = Date.now() - inicio;
+            if (!esp32Online) {
+                esp32Online = true;
+                actualizarEstado(`Conectado (${latencia}ms)`, '#4CAF50');
+                console.log(`✅ ESP32 responde en ${latencia}ms`);
             }
+            actualizarLatencia(latencia);
+            lastCheck = Date.now();
         };
+        
         img.onerror = function() {
-            if (esp32Conectado) {
-                esp32Conectado = false;
-                actualizarEstado('Desconectado', 'red');
+            if (esp32Online) {
+                esp32Online = false;
+                actualizarEstado('Desconectado', '#F44336');
+                console.log('❌ No se pudo conectar');
             }
         };
-        img.src = `http://${ESP32_IP}/ping.gif?t=${Date.now()}`;
+        
+        // Usar /pixel.gif que siempre responde
+        img.src = `http://${ESP32_IP}/pixel.gif?t=${Date.now()}`;
     }
     
     function verificarPulsador() {
-        if (!esp32Conectado) return;
+        if (!esp32Online) return;
         
+        // Crear script para JSONP (única forma que funciona desde HTTPS)
+        const scriptId = 'jsonp-' + Date.now();
         const script = document.createElement('script');
-        script.src = `http://${ESP32_IP}/pulsador-evento?callback=manejarPulsador&t=${Date.now()}`;
-        document.body.appendChild(script);
         
-        setTimeout(() => script.remove(), 3000);
+        script.id = scriptId;
+        script.src = `http://${ESP32_IP}/btn?callback=handleBtn&t=${Date.now()}`;
+        
+        // Auto-remover después de 2 segundos
+        setTimeout(() => {
+            const s = document.getElementById(scriptId);
+            if (s) s.remove();
+        }, 2000);
+        
+        document.body.appendChild(script);
     }
     
-    window.manejarPulsador = function(data) {
-        if (data.event === true || data.evento_detectado === true) {
-            console.log('🔘 Pulsador detectado');
-            manejarAccionPulsador();
+    // Función callback global (debe estar en window)
+    window.handleBtn = function(data) {
+        if (data && data.p === 1) {
+            console.log('🔘 ¡Pulsador presionado!');
+            accionPulsador();
         }
     };
     
-    function manejarAccionPulsador() {
-        // Mostrar notificación
-        mostrarNotificacion('¡Pulsador activado!');
+    function accionPulsador() {
+        mostrarNotificacion('Pulsador activado');
         
-        // Acción: pausar si está corriendo
-        if (enEjecucion) {
-            pausarTemporizador();
-            // Activar tiempo extra si no está activo
-            if (!tiempoExtra) {
-                tiempoExtra = true;
-                tiempoSecundario = 30;
+        if (estado.corriendo) {
+            pausar();
+            if (!estado.tiempoExtra) {
+                estado.tiempoExtra = true;
+                estado.extra = 30;
                 actualizarDisplay();
-                iniciarTemporizador();
+                iniciar();
             }
         } else {
-            // Si no está corriendo, iniciar tiempo extra
-            tiempoExtra = true;
-            tiempoSecundario = 30;
+            estado.tiempoExtra = true;
+            estado.extra = 30;
             actualizarDisplay();
-            iniciarTemporizador();
+            iniciar();
         }
     }
     
     // ======= INTERFAZ =======
-    function crearPanelControl() {
+    function crearPanel() {
         const panel = document.createElement('div');
-        panel.id = 'control-panel';
+        panel.id = 'esp32-panel';
         panel.style.cssText = `
             position: fixed;
             bottom: 20px;
             right: 20px;
             background: #2c3e50;
             color: white;
-            padding: 15px;
-            border-radius: 10px;
+            padding: 12px;
+            border-radius: 8px;
             font-family: Arial;
             z-index: 10000;
-            min-width: 200px;
+            font-size: 13px;
+            min-width: 180px;
+            border-left: 4px solid #FF9800;
         `;
         
         panel.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 10px;">Control Pulsador</div>
-            <div id="estado-esp32" style="margin-bottom: 5px;">Estado: Conectando...</div>
-            <div style="font-size: 12px;">IP: ${ESP32_IP}</div>
-            <button id="btn-probar" style="margin-top: 10px; padding: 8px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+            <div style="font-weight: bold; margin-bottom: 8px;">ESP32 Status</div>
+            <div id="status-text">Conectando...</div>
+            <div style="font-size: 11px; opacity: 0.7; margin-top: 4px;">
+                IP: ${ESP32_IP}
+            </div>
+            <div id="latency" style="font-size: 11px; opacity: 0.7; margin-top: 2px;">
+                Latencia: -- ms
+            </div>
+            <button id="test-btn" style="margin-top: 10px; padding: 6px 12px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 12px;">
                 Probar Pulsador
             </button>
         `;
         
         document.body.appendChild(panel);
         
-        document.getElementById('btn-probar').addEventListener('click', manejarAccionPulsador);
+        document.getElementById('test-btn').addEventListener('click', accionPulsador);
     }
     
     function actualizarEstado(texto, color) {
-        const elemento = document.getElementById('estado-esp32');
-        const panel = document.getElementById('control-panel');
+        const status = document.getElementById('status-text');
+        const panel = document.getElementById('esp32-panel');
         
-        if (elemento) {
-            elemento.textContent = `Estado: ${texto}`;
-            elemento.style.color = color;
+        if (status) {
+            status.textContent = texto;
+            status.style.color = color;
         }
         
         if (panel) {
-            panel.style.borderLeft = `4px solid ${color}`;
+            panel.style.borderLeftColor = color;
         }
     }
     
-    function mostrarNotificacion(mensaje) {
-        const notificacion = document.createElement('div');
-        notificacion.textContent = mensaje;
-        notificacion.style.cssText = `
+    function actualizarLatencia(ms) {
+        const elem = document.getElementById('latency');
+        if (elem) {
+            elem.textContent = `Latencia: ${ms} ms`;
+            elem.style.color = ms < 100 ? '#4CAF50' : ms < 300 ? '#FF9800' : '#F44336';
+        }
+    }
+    
+    function mostrarNotificacion(texto) {
+        const noti = document.createElement('div');
+        noti.textContent = texto;
+        noti.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
             background: #27ae60;
             color: white;
-            padding: 15px;
-            border-radius: 8px;
+            padding: 12px 20px;
+            border-radius: 6px;
             z-index: 20000;
             font-weight: bold;
-            animation: aparecer 0.5s;
+            animation: slideIn 0.3s;
         `;
         
-        const estilo = document.createElement('style');
-        estilo.textContent = `
-            @keyframes aparecer {
+        // Animación
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
                 from { transform: translateX(100%); opacity: 0; }
                 to { transform: translateX(0); opacity: 1; }
             }
         `;
-        document.head.appendChild(estilo);
+        document.head.appendChild(style);
         
-        document.body.appendChild(notificacion);
+        document.body.appendChild(noti);
         
         setTimeout(() => {
-            notificacion.remove();
-            estilo.remove();
-        }, 3000);
+            noti.remove();
+            style.remove();
+        }, 2000);
+    }
+    
+    function setupEventos() {
+        // Botones de tiempo
+        elementos.timeButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (estado.corriendo) return;
+                elementos.timeButtons.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                estado.tiempo = parseInt(this.getAttribute('data-time')) * 60;
+                estado.tiempoExtra = false;
+                actualizarDisplay();
+            });
+        });
+        
+        // Controles
+        elementos.startBtn.addEventListener('click', iniciar);
+        elementos.pauseBtn.addEventListener('click', pausar);
+        elementos.resetBtn.addEventListener('click', reiniciar);
     }
 });
