@@ -1,83 +1,72 @@
-// script.js - VERSIÓN SIMPLIFICADA QUE FUNCIONA
+// script.js - VERSIÓN QUE SÍ FUNCIONA CON GITHUB
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Iniciando aplicación...');
+    console.log('🚀 Competencia - Soluciones Digitales');
+    
+    // ======= CONFIGURACIÓN =======
+    const ESP32_IP = "192.168.0.105";
+    const ESP32_URL = `http://${ESP32_IP}`;
     
     // ======= ELEMENTOS DOM =======
-    const mainTimer = document.getElementById('mainTimer');
-    const secondaryTimer = document.getElementById('secondaryTimer');
-    const startBtn = document.getElementById('startBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const timeButtons = document.querySelectorAll('.time-btn');
+    const elementos = {
+        mainTimer: document.getElementById('mainTimer'),
+        secondaryTimer: document.getElementById('secondaryTimer'),
+        startBtn: document.getElementById('startBtn'),
+        pauseBtn: document.getElementById('pauseBtn'),
+        resetBtn: document.getElementById('resetBtn'),
+        timeButtons: document.querySelectorAll('.time-btn')
+    };
     
-    // ======= VARIABLES CRONÓMETRO =======
-    let selectedTime = 25;
-    let mainTimeLeft = selectedTime * 60;
-    let secondaryTimeLeft = 30;
-    let timerInterval;
-    let isRunning = false;
-    let isExtraTime = false;
-    
-    // ======= VARIABLES ESP32 =======
-    const ESP32_IP = "192.168.0.105"; // ← ¡CAMBIAR ESTA LÍNEA!
-let esp32Connected = false;
-let buttonCheckInterval;
-    
-    const ESP32_IP = "192.168.0.105"; // TU IP
-    let esp32Connected = false;
-    let buttonCheckInterval;
+    // ======= VARIABLES =======
+    let state = {
+        selectedTime: 25,
+        mainTimeLeft: 25 * 60,
+        secondaryTimeLeft: 30,
+        timerInterval: null,
+        isRunning: false,
+        isExtraTime: false,
+        esp32Connected: false
+    };
     
     // ======= INICIALIZACIÓN =======
-    updateDisplay();
-    setupUI();
+    init();
     
-    // Esperar 3 segundos antes de conectar ESP32
-    setTimeout(initESP32, 3000);
-    
-    // ======= EVENT LISTENERS =======
-    timeButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            if (isRunning) return;
-            selectTimeButton(this);
-        });
-    });
-    
-    startBtn.addEventListener('click', startTimer);
-    pauseBtn.addEventListener('click', pauseTimer);
-    resetBtn.addEventListener('click', resetTimer);
-    
-    // ======= FUNCIONES CRONÓMETRO =======
-    function selectTimeButton(button) {
-        timeButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        selectedTime = parseInt(button.getAttribute('data-time'));
-        mainTimeLeft = selectedTime * 60;
-        isExtraTime = false;
+    // ======= FUNCIONES PRINCIPALES =======
+    function init() {
         updateDisplay();
+        setupUI();
+        setupEventListeners();
+        initESP32Connection();
+        
+        // Activar primer botón de tiempo
+        if (elementos.timeButtons.length > 0) {
+            elementos.timeButtons[0].classList.add('active');
+        }
+        
+        console.log('✅ Sistema iniciado');
+        console.log(`📡 ESP32: ${ESP32_URL}`);
     }
     
+    // ======= CRONÓMETRO =======
     function startTimer() {
-        if (isRunning) return;
-        isRunning = true;
-        startBtn.disabled = true;
-        pauseBtn.disabled = false;
-        resetBtn.disabled = false;
+        if (state.isRunning) return;
         
-        timerInterval = setInterval(() => {
-            if (isExtraTime) {
-                if (secondaryTimeLeft > 0) {
-                    secondaryTimeLeft--;
+        state.isRunning = true;
+        elementos.startBtn.disabled = true;
+        elementos.pauseBtn.disabled = false;
+        elementos.resetBtn.disabled = false;
+        
+        state.timerInterval = setInterval(() => {
+            if (state.isExtraTime) {
+                if (state.secondaryTimeLeft > 0) {
+                    state.secondaryTimeLeft--;
                 } else {
-                    clearInterval(timerInterval);
-                    isRunning = false;
-                    isExtraTime = false;
-                    resetTimerState();
+                    endExtraTime();
                 }
             } else {
-                if (mainTimeLeft > 0) {
-                    mainTimeLeft--;
+                if (state.mainTimeLeft > 0) {
+                    state.mainTimeLeft--;
                 } else {
-                    activateExtraTime();
+                    startExtraTime();
                 }
             }
             updateDisplay();
@@ -85,280 +74,323 @@ let buttonCheckInterval;
     }
     
     function pauseTimer() {
-        clearInterval(timerInterval);
-        isRunning = false;
-        startBtn.disabled = false;
-        pauseBtn.disabled = true;
+        clearInterval(state.timerInterval);
+        state.isRunning = false;
+        elementos.startBtn.disabled = false;
+        elementos.pauseBtn.disabled = true;
     }
     
     function resetTimer() {
-        clearInterval(timerInterval);
-        isRunning = false;
-        isExtraTime = false;
-        mainTimeLeft = selectedTime * 60;
-        secondaryTimeLeft = 30;
-        resetTimerState();
+        clearInterval(state.timerInterval);
+        state.isRunning = false;
+        state.isExtraTime = false;
+        state.mainTimeLeft = state.selectedTime * 60;
+        state.secondaryTimeLeft = 30;
         updateDisplay();
+        elementos.startBtn.disabled = false;
+        elementos.pauseBtn.disabled = true;
+        elementos.resetBtn.disabled = true;
     }
     
-    function resetTimerState() {
-        startBtn.disabled = false;
-        pauseBtn.disabled = true;
-        resetBtn.disabled = true;
-        secondaryTimer.classList.remove('timer-danger');
-    }
-    
-    function activateExtraTime() {
-        isExtraTime = true;
-        secondaryTimeLeft = 30;
+    function startExtraTime() {
+        state.isExtraTime = true;
+        state.secondaryTimeLeft = 30;
         updateDisplay();
         
-        if (timerInterval) clearInterval(timerInterval);
+        clearInterval(state.timerInterval);
         
-        isRunning = true;
-        startBtn.disabled = true;
-        pauseBtn.disabled = false;
+        state.isRunning = true;
+        elementos.startBtn.disabled = true;
+        elementos.pauseBtn.disabled = false;
         
-        timerInterval = setInterval(() => {
-            if (secondaryTimeLeft > 0) {
-                secondaryTimeLeft--;
-                if (secondaryTimeLeft <= 5) {
-                    secondaryTimer.classList.add('timer-danger');
-                }
+        state.timerInterval = setInterval(() => {
+            if (state.secondaryTimeLeft > 0) {
+                state.secondaryTimeLeft--;
             } else {
-                clearInterval(timerInterval);
-                isRunning = false;
-                isExtraTime = false;
-                secondaryTimer.classList.remove('timer-danger');
-                mainTimeLeft = selectedTime * 60;
-                secondaryTimeLeft = 30;
-                updateDisplay();
-                startBtn.disabled = false;
-                pauseBtn.disabled = true;
+                endExtraTime();
             }
             updateDisplay();
         }, 1000);
     }
     
+    function endExtraTime() {
+        clearInterval(state.timerInterval);
+        state.isRunning = false;
+        state.isExtraTime = false;
+        state.mainTimeLeft = state.selectedTime * 60;
+        state.secondaryTimeLeft = 30;
+        updateDisplay();
+        elementos.startBtn.disabled = false;
+        elementos.pauseBtn.disabled = true;
+    }
+    
     function updateDisplay() {
-        if (isExtraTime) {
-            mainTimer.textContent = "00:00";
-            secondaryTimer.textContent = `+${secondaryTimeLeft.toString().padStart(2, '0')}`;
+        if (state.isExtraTime) {
+            elementos.mainTimer.textContent = "00:00";
+            elementos.secondaryTimer.textContent = `+${state.secondaryTimeLeft.toString().padStart(2, '0')}`;
         } else {
-            const minutes = Math.floor(mainTimeLeft / 60);
-            const seconds = mainTimeLeft % 60;
-            mainTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            secondaryTimer.textContent = "+30";
+            const minutes = Math.floor(state.mainTimeLeft / 60);
+            const seconds = state.mainTimeLeft % 60;
+            elementos.mainTimer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            elementos.secondaryTimer.textContent = "+30";
         }
     }
     
-    // ======= FUNCIONES ESP32 =======
-    function initESP32() {
+    // ======= ESP32 - MÉTODO QUE SÍ FUNCIONA =======
+    function initESP32Connection() {
         console.log('🔌 Iniciando conexión ESP32...');
-        updateESP32Status('🔄 Conectando...', '#f39c12');
+        updateStatus('🔄 Conectando...', '#FFA500');
         
-        // Usar JSONP para evitar problemas CORS
-        testESP32Connection();
+        // Método 1: Usar Image para ping (evita CORS)
+        testWithImage();
         
-        // Probar cada 10 segundos
-        setInterval(testESP32Connection, 10000);
+        // Método 2: Intentar cada 10 segundos
+        setInterval(testWithImage, 10000);
         
-        // Verificar botón cada 2 segundos
-        buttonCheckInterval = setInterval(checkESP32Button, 2000);
+        // Método 3: Verificar botón cada 2 segundos
+        setInterval(checkButtonWithJSONP, 2000);
     }
     
-    function testESP32Connection() {
-        // Crear script para JSONP (evita CORS)
-        const scriptId = 'esp32-jsonp-' + Date.now();
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = `http://${ESP32_IP}/status?callback=handleESP32Response`;
+    function testWithImage() {
+        const img = new Image();
+        const startTime = Date.now();
         
-        // Timeout de 3 segundos
-        const timeout = setTimeout(() => {
-            document.getElementById(scriptId)?.remove();
-            if (!esp32Connected) {
-                updateESP32Status('❌ Timeout', '#e74c3c');
-            }
-        }, 3000);
-        
-        // Definir callback global
-        window.handleESP32Response = function(data) {
-            clearTimeout(timeout);
-            document.getElementById(scriptId)?.remove();
-            
-            esp32Connected = true;
-            updateESP32Status('✅ Conectado', '#27ae60');
-            console.log('ESP32:', data);
+        img.onload = function() {
+            const latency = Date.now() - startTime;
+            state.esp32Connected = true;
+            updateStatus(`✅ Conectado (${latency}ms)`, '#4CAF50');
+            console.log(`📡 ESP32 responde en ${latency}ms`);
         };
         
+        img.onerror = function() {
+            state.esp32Connected = false;
+            updateStatus('❌ Sin conexión', '#F44336');
+        };
+        
+        // Usar el endpoint de imagen del ESP32
+        img.src = `${ESP32_URL}/ping.gif?t=${Date.now()}`;
+    }
+    
+    function checkButtonWithJSONP() {
+        if (!state.esp32Connected) return;
+        
+        // Crear script para JSONP
+        const scriptId = 'jsonp-' + Date.now();
+        const script = document.createElement('script');
+        
+        script.id = scriptId;
+        script.src = `${ESP32_URL}/btn?callback=handleButton&t=${Date.now()}`;
+        
+        // Timeout
+        setTimeout(() => {
+            const scriptEl = document.getElementById(scriptId);
+            if (scriptEl) scriptEl.remove();
+        }, 3000);
+        
+        // Agregar al documento
         document.body.appendChild(script);
     }
     
-    function checkESP32Button() {
-        if (!esp32Connected) return;
-        
-        // Usar imagen para hacer ping (método simple)
-        const img = new Image();
-        img.onload = function() {
-            // Si la imagen carga, el ESP32 está activo
-            checkButtonStatus();
-        };
-        img.onerror = function() {
-            // Error = ESP32 no disponible
-            esp32Connected = false;
-            updateESP32Status('❌ Desconectado', '#e74c3c');
-        };
-        img.src = `http://${ESP32_IP}/button?t=${Date.now()}`;
-    }
-    
-    function checkButtonStatus() {
-        fetch(`https://cors-anywhere.herokuapp.com/http://${ESP32_IP}/button`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.pressed === true) {
-                    console.log('🔄 Botón físico detectado!');
-                    handlePhysicalButton();
-                }
-            })
-            .catch(error => {
-                console.log('Error botón:', error);
-            });
-    }
+    // Función callback global para JSONP
+    window.handleButton = function(data) {
+        if (data.pressed) {
+            console.log('🔄 Botón físico detectado vía JSONP');
+            handlePhysicalButton();
+        }
+    };
     
     function handlePhysicalButton() {
-        // Mostrar notificación
-        showNotification('Botón físico presionado');
+        console.log('🎯 Ejecutando acción del botón físico');
+        showNotification('Botón físico activado');
         
-        // Acción en el temporizador
-        if (isRunning) {
+        if (state.isRunning) {
             pauseTimer();
-            if (!isExtraTime) {
-                activateExtraTime();
+            if (!state.isExtraTime) {
+                startExtraTime();
             }
         } else {
-            activateExtraTime();
+            startExtraTime();
         }
     }
     
-    // ======= FUNCIONES UI =======
+    // ======= INTERFAZ DE USUARIO =======
     function setupUI() {
-        // Crear contenedor ESP32
-        const container = document.createElement('div');
-        container.id = 'esp32-ui';
-        container.style.cssText = `
+        // Panel de estado ESP32
+        const panel = document.createElement('div');
+        panel.id = 'esp32-panel';
+        panel.style.cssText = `
             position: fixed;
             bottom: 20px;
             right: 20px;
-            background: #2c3e50;
+            background: #2C3E50;
             color: white;
             padding: 15px;
             border-radius: 10px;
-            font-family: Arial;
-            z-index: 1000;
-            min-width: 200px;
+            font-family: Arial, sans-serif;
+            z-index: 10000;
+            min-width: 220px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            border-left: 5px solid #FFA500;
         `;
         
-        container.innerHTML = `
-            <div style="font-weight: bold; margin-bottom: 10px;">🌐 Estado ESP32</div>
-            <div id="esp32-status-text" style="margin-bottom: 5px;">🔄 Conectando...</div>
-            <div id="esp32-ip" style="font-size: 12px; opacity: 0.8;">IP: ${ESP32_IP}</div>
-            <div id="esp32-action" style="margin-top: 10px; font-size: 12px; display: none;">
-                Última acción: <span id="last-action">-</span>
+        panel.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <div style="font-size: 24px;">🌐</div>
+                <div style="font-weight: bold; font-size: 16px;">Estado del Sistema</div>
+            </div>
+            <div id="esp32-status" style="margin-bottom: 8px; font-size: 14px;">
+                🔄 Conectando al ESP32...
+            </div>
+            <div style="font-size: 12px; opacity: 0.8; margin-bottom: 5px;">
+                IP: ${ESP32_IP}
+            </div>
+            <div id="esp32-latency" style="font-size: 11px; opacity: 0.7;">
+                Latencia: -- ms
+            </div>
+            <div id="button-indicator" style="margin-top: 10px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 5px; display: none;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 10px; height: 10px; background: #4CAF50; border-radius: 50%;"></div>
+                    <div style="font-size: 12px;">Botón físico activado</div>
+                </div>
             </div>
         `;
         
-        document.body.appendChild(container);
+        document.body.appendChild(panel);
         
         // Botón de prueba
         const testBtn = document.createElement('button');
-        testBtn.textContent = '🔘 Probar Botón';
+        testBtn.id = 'test-button';
+        testBtn.innerHTML = '🔘 Probar Conexión';
         testBtn.style.cssText = `
             position: fixed;
             bottom: 20px;
             left: 20px;
             padding: 12px 20px;
-            background: #9b59b6;
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-weight: bold;
-            z-index: 1000;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+            z-index: 10000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s;
         `;
-        testBtn.onclick = handlePhysicalButton;
+        
+        testBtn.onmouseover = () => {
+            testBtn.style.transform = 'translateY(-2px)';
+            testBtn.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
+        };
+        
+        testBtn.onmouseout = () => {
+            testBtn.style.transform = 'translateY(0)';
+            testBtn.style.boxShadow = '0 4px 15px rgba(0,0,0,0.2)';
+        };
+        
+        testBtn.onclick = () => {
+            console.log('🧪 Probando conexión manualmente...');
+            testWithImage();
+            handlePhysicalButton(); // También probar la acción
+        };
+        
         document.body.appendChild(testBtn);
     }
     
-    function updateESP32Status(text, color = '#2c3e50') {
-        const statusEl = document.getElementById('esp32-status-text');
-        const container = document.getElementById('esp32-ui');
+    function updateStatus(text, color) {
+        const statusEl = document.getElementById('esp32-status');
+        const panel = document.getElementById('esp32-panel');
         
         if (statusEl) {
             statusEl.textContent = text;
+            statusEl.style.color = color;
         }
-        if (container) {
-            container.style.background = color;
+        
+        if (panel) {
+            panel.style.borderLeftColor = color;
         }
     }
     
     function showNotification(message) {
-        const actionEl = document.getElementById('esp32-action');
-        const lastAction = document.getElementById('last-action');
-        
-        if (actionEl && lastAction) {
-            lastAction.textContent = new Date().toLocaleTimeString();
-            actionEl.style.display = 'block';
-            
-            // Ocultar después de 3 segundos
+        const indicator = document.getElementById('button-indicator');
+        if (indicator) {
+            indicator.style.display = 'block';
             setTimeout(() => {
-                actionEl.style.display = 'none';
-            }, 3000);
+                indicator.style.display = 'none';
+            }, 2000);
         }
         
-        // Notificación temporal
+        // Notificación flotante
         const notification = document.createElement('div');
-        notification.textContent = '🔔 ' + message;
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="font-size: 20px;">🔔</div>
+                <div>${message}</div>
+            </div>
+        `;
+        
         notification.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
-            background: #3498db;
+            background: linear-gradient(135deg, #4CAF50, #2E7D32);
             color: white;
             padding: 15px 25px;
-            border-radius: 8px;
-            z-index: 2000;
-            animation: slideIn 0.5s;
+            border-radius: 10px;
+            z-index: 20000;
+            animation: slideIn 0.5s ease;
             font-weight: bold;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         `;
         
-        // Agregar animación
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateX(100%); opacity: 0; }
-                to { transform: translateX(0); opacity: 1; }
-            }
-        `;
-        document.head.appendChild(style);
+        // Animación
+        if (!document.getElementById('notif-animation')) {
+            const style = document.createElement('style');
+            style.id = 'notif-animation';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes fadeOut {
+                    from { opacity: 1; }
+                    to { opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
         
         document.body.appendChild(notification);
         
-        // Remover después de 3 segundos
+        // Auto-remover
         setTimeout(() => {
-            notification.remove();
-            style.remove();
+            notification.style.animation = 'fadeOut 0.5s ease';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 500);
         }, 3000);
     }
     
-    // ======= INICIALIZACIÓN FINAL =======
-    // Activar primer botón de tiempo
-    if (timeButtons.length > 0) {
-        timeButtons[0].classList.add('active');
+    function setupEventListeners() {
+        // Botones de tiempo
+        elementos.timeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                if (state.isRunning) return;
+                
+                elementos.timeButtons.forEach(btn => btn.classList.remove('active'));
+                this.classList.add('active');
+                
+                state.selectedTime = parseInt(this.getAttribute('data-time'));
+                state.mainTimeLeft = state.selectedTime * 60;
+                state.isExtraTime = false;
+                updateDisplay();
+            });
+        });
+        
+        // Botones de control
+        elementos.startBtn.addEventListener('click', startTimer);
+        elementos.pauseBtn.addEventListener('click', pauseTimer);
+        elementos.resetBtn.addEventListener('click', resetTimer);
     }
-    
-    console.log('✅ Aplicación lista');
-    console.log('📡 ESP32 IP:', ESP32_IP);
 });
